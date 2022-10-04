@@ -14,10 +14,7 @@ def dot_product(a, b):
     Returns:
         out: numpy array of shape (x, x) (scalar if x = 1)
     """
-    out = None
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    out = np.dot(a, b)
     return out
 
 
@@ -35,11 +32,9 @@ def complicated_matrix_function(M, a, b):
     Returns:
         out: numpy matrix of shape (x, 1).
     """
-    out = None
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    aDotB = dot_product(a, b)
+    mDotAT = dot_product(M, a.T)
+    out = aDotB * mDotAT
     return out
 
 
@@ -55,11 +50,7 @@ def eigen_decomp(M):
         w: numpy array of shape (m,) such that the column v[:,i] is the eigenvector corresponding to the eigenvalue w[i].
         v: Matrix where every column is an eigenvector.
     """
-    w = None
-    v = None
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    w, v = np.linalg.eig(M)
     return w, v
 
 
@@ -87,9 +78,11 @@ def euclidean_distance_native(u, v):
     #     Finally, we want to sum the squares and square root the
     #     sum.
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    sum = 0
+    for i in range(len(u)):
+        diff = v[i] - u[i]
+        sum += pow(diff, 2)
+    return pow(sum, 1/2)
 
 
 def euclidean_distance_numpy(u, v):
@@ -119,9 +112,8 @@ def euclidean_distance_numpy(u, v):
     #     Finally, we want to sum the squares and square root the
     #     sum.
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    distSquare = np.sum(np.square(abs(u - v)))
+    return pow(distSquare, 1/2)
 
 
 def get_eigen_values_and_vectors(M, k):
@@ -141,9 +133,9 @@ def get_eigen_values_and_vectors(M, k):
         eigenvectors: list of length k containing the top k eigenvectors
             of shape (m,)
     """
-    eigenvalues = []
-    eigenvectors = []
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    w, v = eigen_decomp(M)
+    w_argsort = np.argsort(abs(w))[::-1][:k] # sorted by top k absolute values
+    eigenvalues = [w[i] for i in w_argsort]
+    eigenvectors = [v[:,i] for i in w_argsort]
+    
     return eigenvalues, eigenvectors
