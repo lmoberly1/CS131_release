@@ -18,10 +18,15 @@ def camera_from_world_transform(d: float = 1.0) -> np.ndarray:
             for world coordinate w and camera coordinate c as column vectors.
             Shape = (4,4) where 4 means 3D+1 for homogeneous.
     """
-    T = np.eye(4)
-    # YOUR CODE HERE
-    pass
-    # END YOUR CODE
+    theta = 135 * np.pi / 180
+    
+    T = np.array([
+        [np.cos(theta), 0, np.sin(theta), 0],
+        [0, 1, 0, 0],
+        [-np.sin(theta), 0, np.cos(theta), d],
+        [0, 0, 0, 1],
+        ])
+    
     assert T.shape == (4, 4)
     return T
 
@@ -50,17 +55,32 @@ def apply_transform(T: np.ndarray, points: np.ndarray) -> Tuple[np.ndarray]:
     """
     N = points.shape[1]
     assert points.shape == (3, N)
-
-    # You'll replace this!
-    points_transformed = np.zeros((3, N))
-
-    # YOUR CODE HERE
-    pass
-    # END YOUR CODE
-
+    
+    # convert all points to homogenous coordinates and apply transformation matrix
+    points_homo = np.append(points, np.ones((1, N)), axis=0)
+    points_t_homo = np.dot(T, points_homo)
+       
+    # convert back to hetergenous coordinates
+    vec = points_t_homo[-1, :]
+    points_transformed = points_t_homo / np.transpose(vec[:, None])
+    points_transformed = points_t_homo[:-1, :]
+    
     assert points_transformed.shape == (3, N)
     return points_transformed
 
+
+def get_det(a, b):
+    """Find the determinent of two points.
+    
+    Args:
+        a: (np.ndarray): First point; shape `(2,)`.
+        b: (np.ndarray): First point; shape `(2,)`.
+    
+    Returns: scalar determinent
+    
+    """
+    return a[0] * b[1] - a[1] * b[0]
+    
 
 def intersection_from_lines(
     a_0: np.ndarray, a_1: np.ndarray, b_0: np.ndarray, b_1: np.ndarray
@@ -84,11 +104,21 @@ def intersection_from_lines(
 
     # Intersection point between lines
     out = np.zeros(2)
+    
+    # Calculate x and y distances between points
+    x_diffs = [a_0[0] - a_1[0], b_0[0] - b_1[0]]
+    y_diffs = [a_0[1] - a_1[1], b_0[1] - b_1[1]]
 
-    # YOUR CODE HERE
-    pass
-    # END YOUR CODE
+    # Get determinent and find point of intersection
+    det = get_det(x_diffs, y_diffs)
 
+    d = (get_det(a_0, a_1), get_det(b_0, b_1))
+    x = get_det(d, x_diffs) / det
+    y = get_det(d, y_diffs) / det
+    
+    out[0] = x
+    out[1] = y
+    
     assert out.shape == (2,)
     assert out.dtype == np.float
 
@@ -96,7 +126,7 @@ def intersection_from_lines(
 
 
 def optical_center_from_vanishing_points(
-    v0: np.ndarray, v1: np.ndarray, v2: np.ndarray
+    A: np.ndarray, B: np.ndarray, C: np.ndarray
 ) -> np.ndarray:
     """Compute the optical center of our camera intrinsics from three vanishing
     points corresponding to mutually orthogonal directions.
@@ -106,21 +136,26 @@ def optical_center_from_vanishing_points(
     - It might be worth reviewing vector projection with dot products.
 
     Args:
-        v0 (np.ndarray): Vanishing point in image space; shape `(2,)`.
-        v1 (np.ndarray): Vanishing point in image space; shape `(2,)`.
-        v2 (np.ndarray): Vanishing point in image space; shape `(2,)`.
+        a (np.ndarray): Vanishing point in image space; shape `(2,)`.
+        b (np.ndarray): Vanishing point in image space; shape `(2,)`.
+        c (np.ndarray): Vanishing point in image space; shape `(2,)`.
 
     Returns:
         np.ndarray: Optical center; shape `(2,)`.
     """
-    assert v0.shape == v1.shape == v2.shape == (2,), "Wrong shape!"
-
+    assert A.shape == B.shape == C.shape == (2,), "Wrong shape!"
+    
     optical_center = np.zeros(2)
+    
+    BC_norm = np.sqrt(sum((C-B)**2))
+    proj_BA_BC = B + (np.dot((A-B), (C-B))/pow(BC_norm, 2)) * (C-B)
+    
+    AC_norm = np.sqrt(sum((C-A)**2))
+    proj_AB_AC = A + (np.dot((B-A), (C-A))/pow(AC_norm, 2)) * (C-A)
+    
+    res = intersection_from_lines(A, proj_BA_BC, B, proj_AB_AC)
 
-    # YOUR CODE HERE
-    pass
-    # END YOUR CODE
-
+    optical_center = res
     assert optical_center.shape == (2,)
     return optical_center
 
@@ -141,13 +176,8 @@ def focal_length_from_two_vanishing_points(
     """
     assert v0.shape == v1.shape == optical_center.shape == (2,), "Wrong shape!"
 
-    f = None
-
-    # YOUR CODE HERE
-    pass
-    # END YOUR CODE
-
-    return float(f)
+    exp = np.dot((v0 - optical_center), (v1 - optical_center))
+    return pow(-exp, 1/2)
 
 
 def physical_focal_length_from_calibration(
@@ -165,10 +195,7 @@ def physical_focal_length_from_calibration(
     Returns:
         float: Calibrated focal length, in millimeters.
     """
-    f_mm = None
+    f_mm = f * sensor_diagonal_mm / image_diagonal_pixels
 
-    # YOUR CODE HERE
-    pass
-    # END YOUR CODE
 
     return f_mm
