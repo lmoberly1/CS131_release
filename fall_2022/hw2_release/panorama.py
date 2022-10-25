@@ -149,12 +149,17 @@ def match_descriptors(desc1, desc2, threshold=0.5):
 
     M = desc1.shape[0]
     dists = cdist(desc1, desc2)
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
-    return matches
+ 
+    for i in range(len(dists)):
+        row = dists[i]
+        A, B = np.argpartition(row, 1)[0:2]
+        if row[A] < (row[B] * threshold):
+            new = np.array([i, A])
+            matches.append(new)
+            
+    out = np.array(matches)
+    return out
+    
 
 
 def fit_affine_matrix(p1, p2):
@@ -182,10 +187,8 @@ def fit_affine_matrix(p1, p2):
         'Different number of points in p1 and p2'
     p1 = pad(p1)
     p2 = pad(p2)
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    H, resid, rank, s = np.linalg.lstsq(p2, p1, rcond=None)
 
     # Sometimes numerical issues cause least-squares to produce the last
     # column which is not exactly [0, 0, 1]
@@ -234,29 +237,43 @@ def ransac(keypoints1, keypoints2, matches, n_iters=200, threshold=20):
 
     N = matches.shape[0]
     n_samples = int(N * 0.2)
-
+    
     matched1 = pad(keypoints1[matches[:,0]])
     matched2 = pad(keypoints2[matches[:,1]])
 
     max_inliers = np.zeros(N, dtype=bool)
     n_inliers = 0
-
+    
     # RANSAC iteration start
 
     # Note: while there're many ways to do random sampling, we use
     # `np.random.shuffle()` followed by slicing out the first `n_samples`
     # matches here in order to align with the auto-grader.
-    # Sample with this code: 
+    # Sample with this code:
+    
     for i in range(n_iters):
         # 1. Select random set of matches
         np.random.shuffle(matches)
         samples = matches[:n_samples]
-        sample1 = pad(keypoints1[samples[:,0]])
-        sample2 = pad(keypoints2[samples[:,1]])
-    
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+        sample1 = keypoints1[samples[:,0]]
+        sample2 = keypoints2[samples[:,1]]
+            
+        # 2. Calculate affine transformation matrix
+        # H = fit_affine_matrix(sample1, sample2)
+        p1 = pad(sample1)
+        p2 = pad(sample2)
+        H = np.linalg.lstsq(p2, p1, rcond=None)[0]
+
+        # 3. Find inliers using given threshold
+        inliers_mask = np.linalg.norm(np.dot(matched2, H) - matched1, axis=1) < threshold
+        inliers_count = np.count_nonzero(inliers_mask)
+        if inliers_count > n_inliers:
+            max_inliers = inliers_mask
+            n_inliers = inliers_count
+        
+    # Recompute matrix with all inliers
+    H = np.linalg.lstsq(matched2[max_inliers], matched1[max_inliers], rcond=None)[0]
+    # H[:,2] = np.array([0, 0, 1])
     return H, orig_matches[max_inliers]
 
 
@@ -288,11 +305,28 @@ def linear_blend(img1_warped, img2_warped):
     # Find column of middle row where warped image 2 starts
     # This is where to start weight mask for warped image 2
     left_margin = np.argmax(img2_mask[out_H//2, :].reshape(1, out_W), 1)[0]
+    
+    # Create weight matrices
+    weights1 = np.ones((out_H, out_W))
+    weights2 = np.ones((out_H, out_W))
+    
+    if left_margin < right_margin:
+        margin_size = right_margin - left_margin
+        # Create gradient for margin
+        gradient = np.linspace(1, 0, num = margin_size)
+        # Insert gradient in weight matrices
+        weights1[:, left_margin:right_margin] = gradient
+        weights2[:, left_margin:right_margin] = np.flip(gradient)
+        # Zero out output space not relevant to image
+        weights1[:, right_margin:out_W] = np.zeros((out_H, out_W - right_margin))
+        weights2[:, 0:left_margin] = np.zeros((out_H, left_margin))
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+  
+    # Apply weight matrices to images
+    img1_new = img1_warped * weights1
+    img2_new = img2_warped * weights2
+    merged = img1_new + img2_new 
+       
     return merged
 
 
@@ -330,10 +364,42 @@ def stitch_multiple_images(imgs, desc_func=simple_descriptor, patch_size=5):
         mtchs = match_descriptors(descriptors[i], descriptors[i+1], 0.7)
         matches.append(mtchs)
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    H_list = [np.eye(3,3)] 
+    num_images = len(imgs)
+     
+    # Compute transformation matrices between images
+    for i in range(num_images-1):
+        H, new_matches = ransac(keypoints[i], keypoints[i+1], matches[i])
+        H_list.append(H)
+    
+    # Get transformation matrices for each image
+    for i in range(1, num_images):
+        H_list[i] = np.dot(H_list[i], H_list[i - 1])
+    
+    # FROM NOTEBOOK: Get output space
+    output_shape, offset = get_output_space(imgs[0], imgs[1:], H_list[1:])
+    # FROM NOTEBOOK: Warp images into output sapce
+    warped_imgs = []
+    img_masks = []
+    for i in range(num_images):
+        img_warped = warp_image(imgs[i], H_list[i], output_shape, offset)
+        img_mask = (img_warped != -1) # Mask == 1 inside the image
+        img_masks.append(img_mask)
+        img_warped[~img_mask] = 0     # Return background values to 0
+        warped_imgs.append(img_warped)
 
+    # Combine warped images
+    merged = warped_imgs[0]
+    overlap = img_masks[0] * 1.0
+    for i in range(1, num_images):
+        merged += warped_imgs[i]
+        overlap += img_masks[i] * 1.0
+        
+    panorama = merged / np.maximum(overlap, 1.0)
+    
     return panorama
+        
+
+    
 
 
