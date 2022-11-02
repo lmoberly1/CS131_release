@@ -34,10 +34,14 @@ def conv(image, kernel):
     pad_width1 = Wk // 2
     pad_width = ((pad_width0,pad_width0),(pad_width1,pad_width1))
     padded = np.pad(image, pad_width, mode='edge')
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    # Pad image and flip kernel
+    kernel_flip = np.flip(kernel)
+    
+    # Compute weighted sum of the neighborhood at each pixel
+    for i in range(Hi):
+        for j in range(Wi):
+            out[i][j] = np.sum(padded[i:i + Hk, j:j + Wk] * kernel_flip)
 
     return out
 
@@ -58,12 +62,17 @@ def gaussian_kernel(size, sigma):
         kernel: numpy array of shape (size, size).
     """
 
-    kernel = np.zeros((size, size))
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    mult = np.linspace(-1, 1, size)
+    xarr, yarr = np.meshgrid(mult, mult)
+    
+    # Normalization
+    norm = 1 / (2 * np.pi * pow(sigma, 2))
+    
+    # Exponent
+    dist = pow(xarr, 2) + pow(yarr, 2)
+    expn = np.exp((-0.5 / pow(sigma, 2)) * dist)
+    
+    kernel = norm * expn
     return kernel
 
 def partial_x(img):
@@ -78,11 +87,8 @@ def partial_x(img):
         out: x-derivative image.
     """
 
-    out = None
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    Dx = np.array([[.5, 0, -.5]])
+    out = conv(img, Dx)
 
     return out
 
@@ -98,11 +104,8 @@ def partial_y(img):
         out: y-derivative image.
     """
 
-    out = None
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    Dy = np.array([[.5], [0], [-.5]])
+    out = conv(img, Dy)
 
     return out
 
@@ -124,9 +127,10 @@ def gradient(img):
     G = np.zeros(img.shape)
     theta = np.zeros(img.shape)
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    Gx = partial_x(img)
+    Gy = partial_y(img)
+    G = np.sqrt(Gx ** 2 + Gy ** 2)
+    theta = np.arctan2(Gy, Gx)
 
     return G, theta
 
