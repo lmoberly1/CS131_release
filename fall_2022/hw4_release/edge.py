@@ -42,7 +42,7 @@ def conv(image, kernel):
     for i in range(Hi):
         for j in range(Wi):
             out[i][j] = np.sum(padded[i:i + Hk, j:j + Wk] * kernel_flip)
-
+    
     return out
 
 def gaussian_kernel(size, sigma):
@@ -62,6 +62,7 @@ def gaussian_kernel(size, sigma):
         kernel: numpy array of shape (size, size).
     """
 
+    """
     mult = np.linspace(-1, 1, size)
     xarr, yarr = np.meshgrid(mult, mult)
     
@@ -73,6 +74,14 @@ def gaussian_kernel(size, sigma):
     expn = np.exp((-0.5 / pow(sigma, 2)) * dist)
     
     kernel = norm * expn
+    """
+    
+    
+    d = (np.arange(size) - size // 2) ** 2
+    kernel = np.exp(-(d.reshape(size, 1) + d.reshape(1, size)) / (2 * sigma ** 2)) \
+     / (2 * np.pi * sigma ** 2)
+    
+    
     return kernel
 
 def partial_x(img):
@@ -87,7 +96,7 @@ def partial_x(img):
         out: x-derivative image.
     """
 
-    Dx = np.array([[.5, 0, -.5]])
+    Dx = np.array([.5, 0.0, -.5]).reshape((1, 3))
     out = conv(img, Dx)
 
     return out
@@ -104,7 +113,7 @@ def partial_y(img):
         out: y-derivative image.
     """
 
-    Dy = np.array([[.5], [0], [-.5]])
+    Dy = np.array([.5, 0.0, -.5]).reshape((3, 1))
     out = conv(img, Dy)
 
     return out
@@ -129,8 +138,8 @@ def gradient(img):
 
     Gx = partial_x(img)
     Gy = partial_y(img)
-    G = np.sqrt(Gx ** 2 + Gy ** 2)
-    theta = np.arctan2(Gy, Gx)
+    G = np.sqrt(Gx * Gx + Gy * Gy)
+    theta = (np.arctan2(Gy, Gx) * 180 / np.pi) % 360
 
     return G, theta
 
@@ -148,17 +157,58 @@ def non_maximum_suppression(G, theta):
     Returns:
         out: non-maxima suppressed image.
     """
+    
+    
     H, W = G.shape
     out = np.zeros((H, W))
 
+    
     # Round the gradient direction to the nearest 45 degrees
     theta = np.floor((theta + 22.5) / 45) * 45
     theta = (theta % 360.0).astype(np.int32)
+    """
+    dx = ((np.cos(theta) + 0.5) // 1).astype(int)
+    dy = ((np.sin(theta) + 0.5) // 1).astype(int)
 
-    #print(G)
-    ### BEGIN YOUR CODE
-    pass
-    ### END YOUR CODE
+    print('dx: ', dx)
+    print('dy: ', dy)
+    
+    G_pad = np.pad(G, ((1,1), (1,1)), 'constant')
+    print('g_pad: ', G_pad)
+    
+    G_pad_indices = np.indices((H, W)) + 1
+    x_index = G_pad_indices[1] #3x3
+    y_index = G_pad_indices[0] #3x3
+    
+    print('G_pad_indices: ', G_pad[x_index])
+    
+    print('new indices: ' )
+    """
+    for i in range(1, H-1):
+        for j in range(1, W-1):
+            angle = theta[i][j]
+            
+            pad_i = i
+            pad_j = j
+            G_pad = G
+            # find neighbor pixels along the direction 
+            if angle == 0 or angle == 180: 
+                neighbors = [G_pad[pad_i, pad_j-1], G_pad[pad_i, pad_j+1]]
+            elif angle == 45 or angle == 225:
+                neighbors = [G_pad[pad_i-1, pad_j-1], G_pad[pad_i+1, pad_j+1]]
+            elif angle == 90 or angle == 270:
+                neighbors = [G_pad[pad_i-1, pad_j], G_pad[pad_i+1, pad_j]]
+            elif angle == 135 or angle == 315:
+                neighbors = [G_pad[pad_i-1, pad_j+1], G_pad[pad_i+1, pad_j-1]]
+            else:
+                neighbors = [G_pad[i, j], G_pad[i, j]]
+            
+            #  suppress non-maximum pixel
+            if G[i][j] >= np.max(neighbors):
+                out[i][j] = G[i][j]
+            else:
+                out[i][j] = 0
+    
 
     return out
 
