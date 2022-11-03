@@ -179,7 +179,6 @@ def double_thresholding(img, high, low):
             higher threshold and greater than the lower threshold.
     """
 
-    print(img)
     strong_edges = np.zeros(img.shape, dtype=np.bool)
     weak_edges = np.zeros(img.shape, dtype=np.bool)
 
@@ -236,10 +235,17 @@ def link_edges(strong_edges, weak_edges):
     # references intact
     weak_edges = np.copy(weak_edges)
     edges = np.copy(strong_edges)
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    # Perform breadth-first search
+    for i, j in indices:
+        q = [(i, j)]
+        while len(q) > 0:
+            i, j = q.pop(0)
+            neighbors = get_neighbors(i, j, H, W)
+            for k, l in neighbors:
+                if not edges[k, l] and weak_edges[k, l]:
+                    edges[k, l] = True
+                    q.append((k, l))
 
     return edges
 
@@ -254,11 +260,24 @@ def canny(img, kernel_size=5, sigma=1.4, high=20, low=15):
     Returns:
         edge: numpy array of shape(H, W).
     """
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    # Get Gaussian kernel
+    kernel = gaussian_kernel(kernel_size, sigma)
+    
+    # Perform smoothing
+    smoothed = conv(img, kernel)
+    
+    # Get gradients
+    grad, theta = gradient(smoothed)
+    
+    # Perform NMS
+    suppressed = non_maximum_suppression(grad, theta)
+    
+    # Perform double thresholding and edge linking
+    strong_edges, weak_edges = double_thresholding(suppressed, high, low)
+    edges = link_edges(strong_edges, weak_edges)
 
-    return edge
+    return edges
 
 
 def hough_transform(img):
@@ -292,8 +311,10 @@ def hough_transform(img):
     # Transform each point (x, y) in image
     # Find rho corresponding to values in thetas
     # and increment the accumulator in the corresponding coordiate.
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    for i in range(len(ys)):
+        for j in range(num_thetas):
+            rho = xs[i] * cos_t[j] + ys[i] * sin_t[j]
+            rho_idx = int(rho + diag_len)
+            accumulator[rho_idx][j] += 1
 
     return accumulator, rhos, thetas
