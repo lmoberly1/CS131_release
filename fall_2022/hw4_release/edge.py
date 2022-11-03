@@ -11,15 +11,12 @@ import numpy as np
 
 def conv(image, kernel):
     """ An implementation of convolution filter.
-
     This function uses element-wise multiplication and np.sum()
     to efficiently compute weighted sum of neighborhood at each
     pixel.
-
     Args:
         image: numpy array of shape (Hi, Wi).
         kernel: numpy array of shape (Hk, Wk).
-
     Returns:
         out: numpy array of shape (Hi, Wi).
     """
@@ -34,102 +31,79 @@ def conv(image, kernel):
     pad_width1 = Wk // 2
     pad_width = ((pad_width0,pad_width0),(pad_width1,pad_width1))
     padded = np.pad(image, pad_width, mode='edge')
-    
-    # Pad image and flip kernel
+
+    # Flip kernel
     kernel_flip = np.flip(kernel)
     
     # Compute weighted sum of the neighborhood at each pixel
     for i in range(Hi):
         for j in range(Wi):
             out[i][j] = np.sum(padded[i:i + Hk, j:j + Wk] * kernel_flip)
-    
+
     return out
 
 def gaussian_kernel(size, sigma):
     """ Implementation of Gaussian Kernel.
-
     This function follows the gaussian kernel formula,
     and creates a kernel matrix.
-
     Hints:
     - Use np.pi and np.exp to compute pi and exp.
-
     Args:
         size: int of the size of output matrix.
         sigma: float of sigma to calculate kernel.
-
     Returns:
         kernel: numpy array of shape (size, size).
     """
 
-    """
-    mult = np.linspace(-1, 1, size)
-    xarr, yarr = np.meshgrid(mult, mult)
-    
-    # Normalization
-    norm = 1 / (2 * np.pi * pow(sigma, 2))
-    
-    # Exponent
-    dist = pow(xarr, 2) + pow(yarr, 2)
-    expn = np.exp((-0.5 / pow(sigma, 2)) * dist)
-    
-    kernel = norm * expn
-    """
-    
-    
-    d = (np.arange(size) - size // 2) ** 2
-    kernel = np.exp(-(d.reshape(size, 1) + d.reshape(1, size)) / (2 * sigma ** 2)) \
-     / (2 * np.pi * sigma ** 2)
-    
-    
+    kernel = np.zeros((size, size))
+    const = 1 / (2 * np.pi * sigma ** 2)
+    half = size // 2
+    for i in range(size):
+        for j in range(size):
+            val = const * np.exp(-((i - half) ** 2 + (j - half) ** 2)/(2 * sigma ** 2))
+            kernel[i][j] = val
+
     return kernel
 
 def partial_x(img):
     """ Computes partial x-derivative of input img.
-
     Hints:
         - You may use the conv function in defined in this file.
-
     Args:
         img: numpy array of shape (H, W).
     Returns:
         out: x-derivative image.
     """
 
-    Dx = np.array([.5, 0.0, -.5]).reshape((1, 3))
+    Dx = np.array([[.5, 0, -.5]])
     out = conv(img, Dx)
 
     return out
 
 def partial_y(img):
     """ Computes partial y-derivative of input img.
-
     Hints:
         - You may use the conv function in defined in this file.
-
     Args:
         img: numpy array of shape (H, W).
     Returns:
         out: y-derivative image.
     """
-
-    Dy = np.array([.5, 0.0, -.5]).reshape((3, 1))
+    
+    Dy = np.array([[.5], [0], [-.5]])
     out = conv(img, Dy)
 
     return out
 
 def gradient(img):
     """ Returns gradient magnitude and direction of input img.
-
     Args:
         img: Grayscale image. Numpy array of shape (H, W).
-
     Returns:
         G: Magnitude of gradient at each pixel in img.
             Numpy array of shape (H, W).
         theta: Direction(in degrees, 0 <= theta < 360) of gradient
             at each pixel in img. Numpy array of shape (H, W).
-
     Hints:
         - Use np.sqrt and np.arctan2 to calculate square root and arctan
     """
@@ -138,61 +112,40 @@ def gradient(img):
 
     Gx = partial_x(img)
     Gy = partial_y(img)
-    G = np.sqrt(Gx * Gx + Gy * Gy)
-    theta = (np.arctan2(Gy, Gx) * 180 / np.pi) % 360
+    G = np.sqrt(Gx ** 2 + Gy ** 2)
+    theta = (np.rad2deg(np.arctan2(Gy, Gx)) + 180) % 360
 
     return G, theta
 
 
 def non_maximum_suppression(G, theta):
     """ Performs non-maximum suppression.
-
     This function performs non-maximum suppression along the direction
     of gradient (theta) on the gradient magnitude image (G).
-
     Args:
         G: gradient magnitude image with shape of (H, W).
         theta: direction of gradients with shape of (H, W).
-
     Returns:
         out: non-maxima suppressed image.
     """
-    
-    
     H, W = G.shape
     out = np.zeros((H, W))
 
-    
     # Round the gradient direction to the nearest 45 degrees
     theta = np.floor((theta + 22.5) / 45) * 45
     theta = (theta % 360.0).astype(np.int32)
-    """
-    dx = ((np.cos(theta) + 0.5) // 1).astype(int)
-    dy = ((np.sin(theta) + 0.5) // 1).astype(int)
+    
+    G_pad = np.pad(G, ((1,1),(1,1)), 'constant')
 
-    print('dx: ', dx)
-    print('dy: ', dy)
-    
-    G_pad = np.pad(G, ((1,1), (1,1)), 'constant')
-    print('g_pad: ', G_pad)
-    
-    G_pad_indices = np.indices((H, W)) + 1
-    x_index = G_pad_indices[1] #3x3
-    y_index = G_pad_indices[0] #3x3
-    
-    print('G_pad_indices: ', G_pad[x_index])
-    
-    print('new indices: ' )
-    """
-    for i in range(1, H-1):
-        for j in range(1, W-1):
-            angle = theta[i][j]
+    # Loop through each pixel to perform NMS
+    for i in range(0, H):
+        for j in range(0, W):
+            angle = theta[i, j]
+            pad_i = i + 1
+            pad_j = j + 1
             
-            pad_i = i
-            pad_j = j
-            G_pad = G
-            # find neighbor pixels along the direction 
-            if angle == 0 or angle == 180: 
+            # Get neighbors
+            if angle == 0 or angle == 180:
                 neighbors = [G_pad[pad_i, pad_j-1], G_pad[pad_i, pad_j+1]]
             elif angle == 45 or angle == 225:
                 neighbors = [G_pad[pad_i-1, pad_j-1], G_pad[pad_i+1, pad_j+1]]
@@ -201,15 +154,14 @@ def non_maximum_suppression(G, theta):
             elif angle == 135 or angle == 315:
                 neighbors = [G_pad[pad_i-1, pad_j+1], G_pad[pad_i+1, pad_j-1]]
             else:
-                neighbors = [G_pad[i, j], G_pad[i, j]]
+                neighbors = [G_pad[pad_i, pad_j], G_pad[pad_i, pad_j]]
             
-            #  suppress non-maximum pixel
+            # Check if maximum and suppress if not
             if G[i][j] >= np.max(neighbors):
                 out[i][j] = G[i][j]
             else:
                 out[i][j] = 0
-    
-
+                
     return out
 
 def double_thresholding(img, high, low):
@@ -218,7 +170,6 @@ def double_thresholding(img, high, low):
         img: numpy array of shape (H, W) representing NMS edge response.
         high: high threshold(float) for strong edges.
         low: low threshold(float) for weak edges.
-
     Returns:
         strong_edges: Boolean array representing strong edges.
             Strong edeges are the pixels with the values greater than
@@ -228,26 +179,24 @@ def double_thresholding(img, high, low):
             higher threshold and greater than the lower threshold.
     """
 
+    print(img)
     strong_edges = np.zeros(img.shape, dtype=np.bool)
     weak_edges = np.zeros(img.shape, dtype=np.bool)
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    strong_edges = img > high
+    weak_edges = (img > low) & (img < high)
 
     return strong_edges, weak_edges
 
 
 def get_neighbors(y, x, H, W):
     """ Return indices of valid neighbors of (y, x).
-
     Return indices of all the valid neighbors of (y, x) in an array of
     shape (H, W). An index (i, j) of a valid neighbor should satisfy
     the following:
         1. i >= 0 and i < H
         2. j >= 0 and j < W
         3. (i, j) != (y, x)
-
     Args:
         y, x: location of the pixel.
         H, W: size of the image.
@@ -267,12 +216,10 @@ def get_neighbors(y, x, H, W):
 
 def link_edges(strong_edges, weak_edges):
     """ Find weak edges connected to strong edges and link them.
-
     Iterate over each pixel in strong_edges and perform breadth first
     search across the connected pixels in weak_edges to link them.
     Here we consider a pixel (a, b) is connected to a pixel (c, d)
     if (a, b) is one of the eight neighboring pixels of (c, d).
-
     Args:
         strong_edges: binary image of shape (H, W).
         weak_edges: binary image of shape (H, W).
@@ -298,7 +245,6 @@ def link_edges(strong_edges, weak_edges):
 
 def canny(img, kernel_size=5, sigma=1.4, high=20, low=15):
     """ Implement canny edge detector by calling functions above.
-
     Args:
         img: binary image of shape (H, W).
         kernel_size: int of size for kernel matrix.
@@ -317,11 +263,9 @@ def canny(img, kernel_size=5, sigma=1.4, high=20, low=15):
 
 def hough_transform(img):
     """ Transform points in the input image into Hough space.
-
     Use the parameterization:
         rho = x * cos(theta) + y * sin(theta)
     to transform a point (x,y) to a sine-like function in Hough space.
-
     Args:
         img: binary image of shape (H, W).
         
