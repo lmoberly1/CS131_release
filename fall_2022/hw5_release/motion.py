@@ -102,7 +102,6 @@ def iterative_lucas_kanade(img1, img2, keypoints, window_size=9, num_iters=7, g=
         x1 = int(round(x))
 
         # TODO: Compute inverse of G at point (x1, y1)
-        
         y1_j = max(y1 - w, 0)
         y1_k = min(y1 + w + 1, img1.shape[0])
         x1_j = max(x1 - w, 0)
@@ -114,8 +113,10 @@ def iterative_lucas_kanade(img1, img2, keypoints, window_size=9, num_iters=7, g=
         g0 = np.sum(Ix_window * Ix_window)
         g1 = np.sum(Ix_window * Iy_window)
         g2 = np.sum(Iy_window * Iy_window)
-        G = np.array([g0, g1, g1, g2]).reshape(2, 2)
+        
+        G = np.array([g0, g1, g1, g2]).reshape(2,2)
         G_inv = np.linalg.inv(G)
+        
 
         # Iteratively update flow vector
         for k in range(num_iters):
@@ -126,18 +127,15 @@ def iterative_lucas_kanade(img1, img2, keypoints, window_size=9, num_iters=7, g=
             
             # TODO: Compute bk and vk = inv(G) x bk
             y2_j = max(y2 - w, 0)
-            y2_k = min(y2 + w + 1, img2.shape[0])
+            y2_k = min(y2 + w + 1, img1.shape[0])
             x2_j = max(x2 - w, 0)
-            x2_k = min(x2 + w + 1, img2.shape[1])
-            img1_window = img1[y1_j:y1_k, x1_j:x1_k].reshape(-1, 1)
-            img2_window = img2[y2_j:y2_k, x2_j:x2_k].reshape(-1, 1)
-                        
-            Ik = (img1_window - img2_window).reshape(-1, 1)
+            x2_k = min(x2 + w + 1, img1.shape[1])
             
-            bk_x = np.sum(Ik * Ix_window)
-            bk_y = np.sum(Ik * Iy_window)
-            bk = np.array([[bk_x],
-                           [bk_y]])
+            temp_diff = np.array(img1[y1_j:y1_k, x1_j:x1_k] - img2[y2_j:y2_k, x2_j:x2_k]).reshape(-1, 1)
+            bk0 = np.sum(temp_diff * Ix_window)
+            bk1 = np.sum(temp_diff * Iy_window)
+            bk = np.array([[bk0], [bk1]])
+            
             vk = np.dot(G_inv, bk).flatten()
 
             # Update flow vector by vk
