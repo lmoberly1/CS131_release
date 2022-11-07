@@ -47,9 +47,20 @@ def lucas_kanade(img1, img2, keypoints, window_size=5):
         # locations can be computed using bilinear interpolation.
         y, x = int(round(y)), int(round(x))
 
-        ### YOUR CODE HERE
-        pass
-        ### END YOUR CODE
+        y1 = max(y - w, 0)
+        y2 = min(y + w + 1, img1.shape[0])
+     
+        x1 = max(x - w, 0)
+        x2 = min(x + w + 1, img1.shape[1])
+        
+        Ix_window = Ix[y1:y2, x1:x2].reshape(-1, 1)
+        Iy_window = Iy[y1:y2, x1:x2].reshape(-1, 1)
+        A = np.hstack((Ix_window, Iy_window))
+        b = It[y1:y2, x1:x2].reshape(-1, 1)
+        
+        res = np.linalg.lstsq(A, -b, rcond=None)[0].flatten()
+        flow_vectors.append(np.flip(res))
+        
 
     flow_vectors = np.array(flow_vectors)
 
@@ -91,9 +102,20 @@ def iterative_lucas_kanade(img1, img2, keypoints, window_size=9, num_iters=7, g=
         x1 = int(round(x))
 
         # TODO: Compute inverse of G at point (x1, y1)
-        ### YOUR CODE HERE
-        pass
-        ### END YOUR CODE
+        
+        y1_j = max(y1 - w, 0)
+        y1_k = min(y1 + w + 1, img1.shape[0])
+        x1_j = max(x1 - w, 0)
+        x1_k = min(x1 + w + 1, img1.shape[1])
+        
+        Ix_window = Ix[y1_j:y1_k, x1_j:x1_k].reshape(-1, 1)
+        Iy_window = Iy[y1_j:y1_k, x1_j:x1_k].reshape(-1, 1)
+        
+        g0 = np.sum(Ix_window * Ix_window)
+        g1 = np.sum(Ix_window * Iy_window)
+        g2 = np.sum(Iy_window * Iy_window)
+        G = np.array([g0, g1, g1, g2]).reshape(2, 2)
+        G_inv = np.linalg.inv(G)
 
         # Iteratively update flow vector
         for k in range(num_iters):
@@ -101,11 +123,22 @@ def iterative_lucas_kanade(img1, img2, keypoints, window_size=9, num_iters=7, g=
             # Refined position of the point in the next frame
             y2 = int(round(y + gy + vy))
             x2 = int(round(x + gx + vx))
-
+            
             # TODO: Compute bk and vk = inv(G) x bk
-            ### YOUR CODE HERE
-            pass
-            ### END YOUR CODE
+            y2_j = max(y2 - w, 0)
+            y2_k = min(y2 + w + 1, img2.shape[0])
+            x2_j = max(x2 - w, 0)
+            x2_k = min(x2 + w + 1, img2.shape[1])
+            img1_window = img1[y1_j:y1_k, x1_j:x1_k].reshape(-1, 1)
+            img2_window = img2[y2_j:y2_k, x2_j:x2_k].reshape(-1, 1)
+                        
+            Ik = (img1_window - img2_window).reshape(-1, 1)
+            
+            bk_x = np.sum(Ik * Ix_window)
+            bk_y = np.sum(Ik * Iy_window)
+            bk = np.array([[bk_x],
+                           [bk_y]])
+            vk = np.dot(G_inv, bk).flatten()
 
             # Update flow vector by vk
             v += vk
@@ -144,9 +177,11 @@ def pyramid_lucas_kanade(
     g = np.zeros(keypoints.shape)
 
     for L in range(level, -1, -1):
-        ### YOUR CODE HERE
-        pass
-        ### END YOUR CODE
+        p = keypoints / (scale ** L)
+        d = iterative_lucas_kanade(pyramid1[L], pyramid2[L], p, window_size, num_iters, g)
+        # update for next loop if not at end
+        if L > 0:
+            g  = (g + d) * scale
 
     d = g + d
     return d
@@ -166,9 +201,12 @@ def compute_error(patch1, patch2):
     """
     assert patch1.shape == patch2.shape, "Different patch shapes"
     error = 0
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    # print(patch1.shape, patch2.shape)
+    norm_patch1 = (patch1 - np.mean(patch1)) / np.std(patch1)
+    norm_patch2 = (patch2 - np.mean(patch2)) / np.std(patch2)
+    error = np.mean(np.square(norm_patch1 - norm_patch2))
+     
     return error
 
 
