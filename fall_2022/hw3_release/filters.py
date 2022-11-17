@@ -27,11 +27,22 @@ def conv_nested(image, kernel):
     Hi, Wi = image.shape
     Hk, Wk = kernel.shape
     out = np.zeros((Hi, Wi))
+    
+    h = Hk // 2
+    w = Wk // 2
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    # Loop through each pixel in image
+    for i in range(Hi):
+        for j in range(Wi):
+            # Loop through each pixel in kernel
+            for k in range(Hk):
+                for l in range(Wk):
+                    # Check if kernel is in bounds of image
+                    height = i - (k - h)
+                    width = j - (l - w)
+                    if height >= 0 and height < Hi and width >= 0 and width < Wi:
+                        # Apply convolution filter
+                        out[i, j] += image[height, width] * kernel[k, l] 
     return out
 
 def zero_pad(image, pad_height, pad_width):
@@ -52,12 +63,7 @@ def zero_pad(image, pad_height, pad_width):
         out: numpy array of shape (H+2*pad_height, W+2*pad_width).
     """
 
-    H, W = image.shape
-    out = None
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    out = np.pad(image, ((pad_height, pad_height), (pad_width, pad_width)), 'constant')
     return out
 
 
@@ -80,14 +86,20 @@ def conv_fast(image, kernel):
     Returns:
         out: numpy array of shape (Hi, Wi).
     """
+    
     Hi, Wi = image.shape
     Hk, Wk = kernel.shape
     out = np.zeros((Hi, Wi))
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    
+    # Pad image and flip kernel
+    padded_image = zero_pad(image, Hk // 2, Wk // 2)
+    kernel_flip = np.flip(kernel)
+    
+    # Compute weighted sum of the neighborhood at each pixel
+    for i in range(Hi):
+        for j in range(Wi):
+            out[i][j] = np.sum(padded_image[i:i + Hk, j:j + Wk] * kernel_flip)
+    
     return out
 
 def cross_correlation(f, g):
@@ -103,11 +115,7 @@ def cross_correlation(f, g):
         out: numpy array of shape (Hf, Wf).
     """
 
-    out = None
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    out = conv_fast(f, np.flip(g))
     return out
 
 def zero_mean_cross_correlation(f, g):
@@ -125,11 +133,7 @@ def zero_mean_cross_correlation(f, g):
         out: numpy array of shape (Hf, Wf).
     """
 
-    out = None
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    out = cross_correlation(f, g - g.mean())
     return out
 
 def normalized_cross_correlation(f, g):
@@ -148,10 +152,24 @@ def normalized_cross_correlation(f, g):
     Returns:
         out: numpy array of shape (Hf, Wf).
     """
-
-    out = None
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    
+    
+    Hi, Wi = f.shape
+    Ht, Wt = g.shape
+    out = np.zeros((Hi, Wi))
+    
+    f = zero_pad(f, Ht // 2, Wt // 2)
+    
+    # Normalize kernel
+    normalized_kernel = (g - np.mean(g))/np.std(g)
+    
+    # Compute weighted sum of the neighborhood at each pixel
+    for i in range(Hi):
+        for j in range(Wi):
+            # Normalize patch
+            patch = f[i:i + Ht, j:j + Wt]
+            normalized_patch = (patch - np.mean(patch))/np.std(patch)
+            # Compute weighted sum
+            out[i][j] = np.sum(normalized_patch * normalized_kernel)
+    
     return out

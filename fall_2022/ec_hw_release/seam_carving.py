@@ -29,9 +29,8 @@ def energy_function(image):
     out = np.zeros((H, W))
     gray_image = color.rgb2gray(image)
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    grad = np.gradient(gray_image)
+    out = np.abs(grad[0]) + np.abs(grad[1])
 
     return out
 
@@ -78,10 +77,26 @@ def compute_cost(image, energy, axis=1):
     # Initialization
     cost[0] = energy[0]
     paths[0] = 0  # we don't care about the first row of paths
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    # Pad costs to make out-of-bound paths impossible
+    cost_pad = np.pad(cost, ((0,0), (1,1)), mode='constant', constant_values=np.inf)
+    for i in range(1, H):
+        # Get all 3 possible paths from previous row
+        p_left = cost_pad[i-1, :W]
+        p_mid = cost_pad[i-1, 1:W+1]
+        p_right = cost_pad[i-1, 2:W+2]
+        pos_paths = np.array([p_left, p_mid, p_right])
+        
+        # Get indices of least costly path
+        paths[i] = np.argmin(pos_paths, axis=0)
+        
+        # Update costs using energy of row and least costly path from previous row
+        cost_pad[i, 1:-1] = energy[i] + np.min(pos_paths, axis=0)
+    
+    # Center around pixel
+    paths[1:] -= 1
+    # Update cost matrix
+    cost = cost_pad[:, 1:-1]
 
     if axis == 0:
         cost = np.transpose(cost, (1, 0))
@@ -117,9 +132,10 @@ def backtrack_seam(paths, end):
     # Initialization
     seam[H-1] = end
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    for i in range(H-2, -1, -1):
+        prev_idx = seam[i+1]
+        # Center path around prev_idx
+        seam[i] = prev_idx + paths[i+1, prev_idx]
 
     # Check that seam only contains values in [0, W-1]
     assert np.all(np.all([seam >= 0, seam < W], axis=0)), "seam contains values out of bounds"
@@ -147,9 +163,9 @@ def remove_seam(image, seam):
 
     out = None
     H, W, C = image.shape
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    mask = np.arange(W) != seam[:, None]
+    out = image[mask].reshape(H, W-1,C)
     out = np.squeeze(out)  # remove last dimension if C == 1
 
     # Make sure that `out` has same type as `image`
@@ -195,9 +211,19 @@ def reduce(image, size, axis=1, efunc=energy_function, cfunc=compute_cost, bfunc
 
     assert size > 0, "Size must be greater than zero"
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    while out.shape[1] > size:
+        # Get energy
+        energy = efunc(out)
+        
+        # Compute cost matrix
+        cost, paths = cfunc(out, energy)
+        
+        # Backtrack seam
+        end = np.argmin(cost[-1])
+        seam = bfunc(paths, end)
+        
+        # Remove seam
+        out = rfunc(out, seam)
 
     assert out.shape[1] == size, "Output doesn't have the right shape"
 
@@ -222,9 +248,9 @@ def duplicate_seam(image, seam):
 
     H, W, C = image.shape
     out = np.zeros((H, W + 1, C))
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    for i in range(H):
+        out[i] = np.insert(image[i], seam[i], image[i, seam[i]], axis=0)
 
     return out
 
@@ -263,9 +289,19 @@ def enlarge_naive(image, size, axis=1, efunc=energy_function, cfunc=compute_cost
 
     assert size > W, "size must be greather than %d" % W
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    while out.shape[1] < size:
+        # Get energy
+        energy = efunc(out)
+        
+        # Compute cost matrix
+        cost, paths = cfunc(out, energy)
+        
+        # Backtrack seam
+        end = np.argmin(cost[-1])
+        seam = bfunc(paths, end)
+        
+        # Duplicate seam
+        out = dfunc(out, seam)
 
     if axis == 0:
         out = np.transpose(out, (1, 0, 2))
@@ -390,9 +426,14 @@ def enlarge(image, size, axis=1, efunc=energy_function, cfunc=compute_cost, dfun
 
     assert size <= 2 * W, "size must be smaller than %d" % (2 * W)
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    seams = find_seams(out, size - W)
+    seams = seams[:,:,None]
+    for i in range(size - W):
+        temp_seams = seams - (i + 1)
+        seam = np.nonzero(temp_seams == 0)[1]
+        out = dfunc(out, seam)
+        seams = dfunc(seams, seam)
 
     if axis == 0:
         out = np.transpose(out, (1, 0, 2))
@@ -418,6 +459,8 @@ def compute_forward_cost(image, energy):
         cost: numpy array of shape (H, W)
         paths: numpy array of shape (H, W) containing values -1, 0 or 1
     """
+    
+    # Note: used reference material: https://avikdas.com/2019/07/29/improved-seam-carving-with-forward-energy.html
 
     image = color.rgb2gray(image)
     H, W = image.shape
@@ -431,11 +474,37 @@ def compute_forward_cost(image, energy):
         if j > 0 and j < W - 1:
             cost[0, j] += np.abs(image[0, j+1] - image[0, j-1])
     paths[0] = 0  # we don't care about the first row of paths
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    
+    # Pad costs to make out-of-bound paths impossible
+    cost_pad = np.pad(cost, ((0,0), (1,1)), 'constant', constant_values=np.inf)
+    image_pad = np.pad(image, ((0, 0), (1, 1)), 'constant')
+    for i in range(1, H):
+        # Calculate forward costs
+        c_mid = np.abs(image_pad[i, 2:] - image_pad[i, :-2])
+        c_mid[0] = 0
+        c_mid[-1] = 0
+        c_left = c_mid + np.abs(image_pad[i - 1, 1:-1] - image_pad[i, :-2])
+        c_right = c_mid + np.abs(image_pad[i - 1, 1:-1] - image_pad[i, 2:])
+        c_left[0] = 0
+        c_right[-1] = 0
+        
+        # Get all 3 possible paths from previous row
+        p_left = cost_pad[i-1, :W] + c_left
+        p_mid = cost_pad[i-1, 1:W+1] + c_mid
+        p_right = cost_pad[i-1, 2:W+2] + c_right
+        pos_paths = np.array([p_left, p_mid, p_right])
+        
+        # Get indices of least costly path
+        paths[i] = np.argmin(pos_paths, axis=0)
+        
+        # Update costs using energy of row and least costly path from previous row
+        cost_pad[i, 1:-1] = energy[i] + np.min(pos_paths, axis=0)
+    
+    # Center around pixel
+    paths[1:] -= 1
+    # Update cost matrix
+    cost = cost_pad[:, 1:-1]
+    
     # Check that paths only contains -1, 0 or 1
     assert np.all(np.any([paths == 1, paths == 0, paths == -1], axis=0)), \
            "paths contains other values than -1, 0 or 1"

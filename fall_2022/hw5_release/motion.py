@@ -136,7 +136,7 @@ def iterative_lucas_kanade(img1, img2, keypoints, window_size=9, num_iters=7, g=
             bk1 = np.sum(temp_diff * Iy_window)
             bk = np.array([[bk0], [bk1]])
             
-            vk = np.dot(G_inv, bk).flatten()
+            vk = np.dot(G_inv, bk).reshape(-1)
 
             # Update flow vector by vk
             v += vk
@@ -173,12 +173,12 @@ def pyramid_lucas_kanade(
 
     # Initialize pyramidal guess
     g = np.zeros(keypoints.shape)
-
-    for L in range(level, -1, -1):
-        p = keypoints / (scale ** L)
-        d = iterative_lucas_kanade(pyramid1[L], pyramid2[L], p, window_size, num_iters, g)
+    d = None
+    for lvl in range(level, -1, -1):
+        scaled_points = keypoints / (scale ** lvl)
+        d = iterative_lucas_kanade(pyramid1[lvl], pyramid2[lvl], scaled_points, window_size, num_iters, g)
         # update for next loop if not at end
-        if L > 0:
+        if lvl > 0:
             g  = (g + d) * scale
 
     d = g + d
@@ -200,7 +200,6 @@ def compute_error(patch1, patch2):
     assert patch1.shape == patch2.shape, "Different patch shapes"
     error = 0
     
-    # print(patch1.shape, patch2.shape)
     norm_patch1 = (patch1 - np.mean(patch1)) / np.std(patch1)
     norm_patch2 = (patch2 - np.mean(patch2)) / np.std(patch2)
     error = np.mean(np.square(norm_patch1 - norm_patch2))
@@ -293,8 +292,16 @@ def IoU(bbox1, bbox2):
     x2, y2, w2, h2 = bbox2
     score = 0
 
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    xA = max(x1, x2)
+    xB = min(x1 + w1, x2 + w2)
+    xUnion = max(xB - xA, 0)
+    
+    yA = max(y1, y2)
+    yB = min(y1 + h1, y2 + h2)
+    yUnion = max(yB - yA, 0)
+    
+    union = xUnion * yUnion
+    
+    score = union / (w1 * h1 + w2 * h2 - union)
 
     return score
