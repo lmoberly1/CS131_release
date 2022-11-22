@@ -44,11 +44,27 @@ def kmeans(features, k, num_iters=100):
     assignments = np.zeros(N, dtype=np.uint32)
 
     for n in range(num_iters):
-        ### YOUR CODE HERE
-        pass
-        ### END YOUR CODE
+        # Loop through each point
+        for i in range(N):
+            min_dist = np.inf
+            min_idx = 0
+            # Loop through each cluster
+            for j in range(k):
+                # Compute distance from point to cluster
+                dist = np.linalg.norm(features[i] - centers[j])
+                # Set if minimum
+                if (dist < min_dist):
+                    min_dist = dist
+                    min_idx = j
+            # Assign point to cluster
+            assignments[i] = min_idx
+        # Recalculate cluster centers
+        for i in range(k):
+            idxs = np.nonzero([assignments == i])[1]
+            centers[i] = np.mean(features[idxs], axis=0)
 
     return assignments
+
 
 def kmeans_fast(features, k, num_iters=100):
     """ Use kmeans algorithm to group features into k clusters.
@@ -80,12 +96,14 @@ def kmeans_fast(features, k, num_iters=100):
     assignments = np.zeros(N, dtype=np.uint32)
 
     for n in range(num_iters):
-        ### YOUR CODE HERE
-        pass
-        ### END YOUR CODE
+        dists = cdist(features, centers)
+        assignments = np.argmin(dists, axis=1)
+        # Recalculate cluster centers
+        for i in range(k):
+            idxs = np.nonzero([assignments == i])[1]
+            centers[i] = np.mean(features[idxs], axis=0)
 
     return assignments
-
 
 
 def hierarchical_clustering(features, k):
@@ -136,9 +154,22 @@ def hierarchical_clustering(features, k):
     
 
     while n_clusters > k:
-        ### YOUR CODE HERE
-        pass
-        ### END YOUR CODE
+        # Get distances between centers
+        dists = pdist(centers)
+        square = squareform(dists)
+        np.fill_diagonal(square, np.inf)
+        index = np.where(square == np.min(square))[0]
+
+        # Update assignments
+        assignments = np.where(assignments != index[1], assignments, index[0])
+        assignments = np.where(assignments < index[1], assignments, assignments - 1)
+        
+        # Combine two centers into one new center
+        centers = np.delete(centers, index[1], axis=0)
+        mask = np.nonzero([assignments == index[0]])[1]
+        centers[index[0]] = np.mean(features[mask], axis=0)
+
+        n_clusters -= 1
 
     return assignments
 
@@ -158,7 +189,7 @@ def color_features(img):
     features = np.zeros((H*W, C))
 
     ### YOUR CODE HERE
-    pass
+    features = img.reshape(H*W, C)
     ### END YOUR CODE
 
     return features
@@ -185,10 +216,16 @@ def color_position_features(img):
     H, W, C = img.shape
     color = img_as_float(img)
     features = np.zeros((H*W, C+2))
-
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    
+    # Get feature vector for each pixel
+    for i in range(H):
+        for j in range(W):
+            arr = np.array([i, j])
+            for c in range(C):
+                arr = np.append(arr, color[i,j,c])
+            features[i*W + j] = arr
+    # Normalize features
+    features = (features - np.mean(features, axis=0)) / np.std(features, axis=0)
 
     return features
 
@@ -225,11 +262,7 @@ def compute_accuracy(mask_gt, mask):
             bigger number is better, where 1.0 indicates a perfect segmentation.
     """
 
-    accuracy = None
-    ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
-
+    accuracy = np.count_nonzero(mask == mask_gt) / mask.size
     return accuracy
 
 def evaluate_segmentation(mask_gt, segments):
